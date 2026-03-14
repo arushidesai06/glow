@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RED LIGHT RACER</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root{--red:#ff2233;--yellow:#ffcc00;--green:#00ff88;--bg:#0a0a0f;--panel:#12121a;--border:#2a2a3a;--text:#e0e0ff;--dim:#404060}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;height:100vh;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);pointer-events:none;z-index:100}
+#game-wrapper{display:flex;gap:20px;align-items:flex-start;width:100%;max-width:1080px;padding:12px}
+#canvas-wrap{flex:1;position:relative}
+canvas{display:block;border:2px solid var(--border);border-radius:4px;box-shadow:0 0 40px rgba(0,255,136,0.07);width:100%}
+#panel{width:210px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.title{font-family:'Orbitron',sans-serif;font-size:20px;font-weight:900;letter-spacing:3px;text-align:center;color:var(--green);text-shadow:0 0 20px var(--green)}
+#traffic-light{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.bulb{width:50px;height:50px;border-radius:50%;border:3px solid #222;background:#111;transition:box-shadow 0.08s,background 0.08s}
+.bulb.active-red{background:var(--red);box-shadow:0 0 24px var(--red),0 0 50px rgba(255,34,51,0.5)}
+.bulb.active-yellow{background:var(--yellow);box-shadow:0 0 24px var(--yellow),0 0 50px rgba(255,204,0,0.5)}
+.bulb.active-green{background:var(--green);box-shadow:0 0 24px var(--green),0 0 50px rgba(0,255,136,0.5)}
+#instruction{font-size:12px;text-align:center;line-height:1.7;color:var(--text);padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:6px;min-height:60px;display:flex;align-items:center;justify-content:center}
+#instruction.urgent{color:var(--red);border-color:var(--red);animation:pulse 0.35s infinite alternate}
+#instruction.go{color:var(--green);border-color:var(--green)}
+@keyframes pulse{from{box-shadow:none}to{box-shadow:0 0 16px rgba(255,34,51,0.5)}}
+.panel-box{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px}
+.panel-label{font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin-bottom:4px}
+.panel-value{font-family:'Orbitron',sans-serif;font-size:22px;font-weight:700;color:#fff}
+#lives-display{display:flex;gap:5px;margin-top:4px;font-size:18px}
+.life.lost{opacity:0.15;filter:grayscale(1)}
+#best-val{font-size:18px;color:var(--yellow);text-shadow:0 0 8px var(--yellow)}
+
+/* Serial UI */
+#serial-box{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px}
+#serial-status{font-size:10px;letter-spacing:1px;color:var(--dim);text-align:center}
+#serial-status.connected{color:var(--green)}
+#serial-status.error{color:var(--red)}
+#serial-btn{padding:7px;background:transparent;border:1px solid #3a3a5a;color:#8080c0;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;border-radius:4px;width:100%;transition:all 0.2s}
+#serial-btn:hover{border-color:var(--green);color:var(--green)}
+#serial-btn.connected{border-color:var(--green);color:var(--green)}
+#serial-btn.error{border-color:var(--red);color:var(--red)}
+#howto-btn{padding:5px;background:transparent;border:1px solid #2a2a3a;color:#404060;font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;border-radius:4px;width:100%;transition:all 0.2s}
+#howto-btn:hover{color:#8080a0;border-color:#4a4a6a}
+
+/* How-to modal */
+#modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:200;align-items:center;justify-content:center;padding:20px}
+#modal.show{display:flex}
+#modal-box{background:#0d0d18;border:1px solid var(--border);border-radius:10px;max-width:500px;width:100%;padding:24px;max-height:90vh;overflow-y:auto}
+#modal-box h2{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--green);letter-spacing:3px;margin-bottom:14px}
+#modal-box h3{font-family:'Orbitron',sans-serif;font-size:12px;color:var(--yellow);letter-spacing:2px;margin:14px 0 6px}
+#modal-box p,#modal-box li{font-size:12px;line-height:1.8;color:#b0b0d0;margin-bottom:3px}
+#modal-box ul{padding-left:18px}
+.code{background:#0a0a14;border:1px solid var(--border);border-radius:4px;padding:10px;font-size:10px;color:#80ff80;white-space:pre;overflow-x:auto;line-height:1.6;margin:6px 0}
+.note{background:#1a1a10;border-left:3px solid var(--yellow);padding:8px 12px;border-radius:0 4px 4px 0;margin:8px 0;font-size:11px;color:#d0c080;line-height:1.7}
+#close-modal{margin-top:16px;width:100%;padding:10px;background:var(--green);color:#000;font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;border:none;border-radius:4px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- HOW TO CONNECT MODAL -->
+<div id="modal">
+  <div id="modal-box">
+    <h2>⚡ ARDUINO SETUP</h2>
+
+    <div class="note">⚠️ Web Serial only works in <strong>Chrome or Edge</strong>. The game must be opened via a local server, NOT double-clicked from Finder.</div>
+
+    <h3>STEP 1 — SERVE THE FILE LOCALLY</h3>
+    <p>Open Terminal on your Mac and run:</p>
+    <div class="code">cd ~/Downloads
+python3 -m http.server 8000</div>
+    <p>Then open Chrome and go to: <strong>http://localhost:8000/traffic-light-game.html</strong></p>
+
+    <h3>STEP 2 — ARDUINO SKETCH</h3>
+    <p>Upload this to your Elegoo Uno via Arduino IDE:</p>
+    <div class="code">const int RED_PIN    = 13;
+const int YELLOW_PIN = 12;
+const int GREEN_PIN  = 11;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(RED_PIN,    OUTPUT);
+  pinMode(YELLOW_PIN, OUTPUT);
+  pinMode(GREEN_PIN,  OUTPUT);
+  // All off at start
+  digitalWrite(RED_PIN,    LOW);
+  digitalWrite(YELLOW_PIN, LOW);
+  digitalWrite(GREEN_PIN,  LOW);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char cmd = Serial.read();
+    digitalWrite(RED_PIN,    LOW);
+    digitalWrite(YELLOW_PIN, LOW);
+    digitalWrite(GREEN_PIN,  LOW);
+    if      (cmd == 'R') digitalWrite(RED_PIN,    HIGH);
+    else if (cmd == 'Y') digitalWrite(YELLOW_PIN, HIGH);
+    else if (cmd == 'G') digitalWrite(GREEN_PIN,  HIGH);
+    // cmd == 'O' = all off
+  }
+}</div>
+
+    <h3>STEP 3 — CONNECT</h3>
+    <ul>
+      <li>Close Arduino IDE Serial Monitor (it blocks the port)</li>
+      <li>Click <strong>"Connect Arduino"</strong> in the game</li>
+      <li>Select your port (e.g. <code>/dev/cu.usbmodem...</code>)</li>
+    </ul>
+
+    <button id="close-modal" onclick="document.getElementById('modal').classList.remove('show')">GOT IT — CLOSE</button>
+  </div>
+</div>
+
+<div id="game-wrapper">
+  <div id="canvas-wrap">
+    <canvas id="gameCanvas" width="600" height="500"></canvas>
+  </div>
+  <div id="panel">
+    <div class="title">RED<br>LIGHT<br>RACER</div>
+
+    <div id="traffic-light">
+      <div class="bulb" id="bulb-red"></div>
+      <div class="bulb" id="bulb-yellow"></div>
+      <div class="bulb" id="bulb-green"></div>
+    </div>
+
+    <div id="instruction">Press <b>SPACE</b> to start</div>
+
+    <div class="panel-box">
+      <div class="panel-label">Speed (km/h)</div>
+      <div class="panel-value" id="speed-val">0</div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-label">Race Time</div>
+      <div class="panel-value" id="time-val">0.00s</div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-label">Lives</div>
+      <div id="lives-display">
+        <span class="life" id="life1">🚗</span>
+        <span class="life" id="life2">🚗</span>
+        <span class="life" id="life3">🚗</span>
+      </div>
+    </div>
+    <div class="panel-box">
+      <div class="panel-label">Best Time</div>
+      <div id="best-val">--</div>
+    </div>
+
+    <div id="serial-box">
+      <div id="serial-status">● NOT CONNECTED</div>
+      <button id="serial-btn" onclick="connectSerial()">⚡ CONNECT ARDUINO</button>
+      <button id="howto-btn" onclick="document.getElementById('modal').classList.add('show')">? HOW TO CONNECT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Serial ────────────────────────────────────────────────
+let serialWriter = null;
+let serialConnected = false;
+let lastSentCmd = null;
+
+async function connectSerial() {
+  const btn = document.getElementById('serial-btn');
+  const status = document.getElementById('serial-status');
+
+  if (!('serial' in navigator)) {
+    status.textContent = '✗ USE CHROME OR EDGE';
+    status.className = 'error';
+    btn.className = 'error';
+    document.getElementById('modal').classList.add('show');
+    return;
+  }
+
+  try {
+    status.textContent = '○ CONNECTING...';
+    status.className = '';
+    btn.textContent = '...';
+
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    const encoder = new TextEncoderStream();
+    encoder.readable.pipeTo(port.writable);
+    serialWriter = encoder.writable.getWriter();
+
+    serialConnected = true;
+    status.textContent = '● CONNECTED';
+    status.className = 'connected';
+    btn.textContent = '✓ ARDUINO CONNECTED';
+    btn.className = 'connected';
+
+    // Send current light state immediately
+    if (gs && gs.light) sendLED(gs.light === 'red' ? 'R' : gs.light === 'yellow' ? 'Y' : gs.light === 'green' ? 'G' : 'O');
+    else sendLED('O');
+
+  } catch(e) {
+    console.error('Serial error:', e);
+    if (e.name === 'NotFoundError') {
+      status.textContent = '○ CANCELLED';
+      status.className = '';
+      btn.textContent = '⚡ CONNECT ARDUINO';
+      btn.className = '';
+    } else {
+      status.textContent = '✗ ' + (e.message || 'CONNECTION FAILED');
+      status.className = 'error';
+      btn.textContent = '↺ RETRY';
+      btn.className = 'error';
+    }
+  }
+}
+
+async function sendLED(cmd) {
+  if (!serialWriter || !serialConnected) return;
+  if (cmd === lastSentCmd) return; // don't re-send same command
+  lastSentCmd = cmd;
+  try {
+    await serialWriter.write(cmd);
+  } catch(e) {
+    console.error('Send failed:', e);
+    serialConnected = false;
+    document.getElementById('serial-status').textContent = '✗ DISCONNECTED';
+    document.getElementById('serial-status').className = 'error';
+  }
+}
+
+// ── Canvas ────────────────────────────────────────────────
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const ROAD_L = 170, ROAD_R = 430, ROAD_MID = (ROAD_L + ROAD_R) / 2;
+const MAX_SPD = 6.5, ACCEL = 0.15, DECEL = 0.1;
+const TOTAL_ROAD = H * 3.2;
+
+// Light schedule: trigger red at these progress points
+const SCHEDULE = [
+  { pct: 0.22, redDur: 3000 },
+  { pct: 0.44, redDur: 2500 },
+  { pct: 0.64, redDur: 2800 },
+  { pct: 0.82, redDur: 2000 },
+];
+
+let gs = null, bestTime = null, spaceDown = false, lastTs = 0;
+
+// ── Game Rules ────────────────────────────────────────────
+// GREEN: hold SPACE to accelerate. Release to coast/slow.
+// RED:   release SPACE within 0.3s grace or lose a life.
+//        Pressing SPACE again after grace on red = lose a life.
+// LEDs on Arduino mirror the screen light INSTANTLY via serial.
+
+function initGame() {
+  gs = {
+    phase: 'idle',
+    light: null,
+    lightTimer: 0,
+    graceTimer: 0,
+    graceDone: false,
+    scroll: 0,
+    carSpd: 0,
+    raceStart: 0,
+    elapsed: 0,
+    lives: 3,
+    schedIdx: 0,
+    penaltyActive: false,
+    penaltyTimer: 0,
+    winTime: null,
+    trees: genTrees(),
+    clouds: genClouds(),
+  };
+  lastSentCmd = null; // reset so first command always sends
+  updateLivesUI();
+  setBulbs(null);
+  sendLED('O');
+  setMsg('Press <b>SPACE</b> to race!', '');
+  document.getElementById('time-val').textContent = '0.00s';
+  document.getElementById('speed-val').textContent = '0';
+}
+
+function genTrees() {
+  const t = [];
+  for (let i = 0; i < 22; i++) {
+    const left = Math.random() < 0.5;
+    t.push({
+      x: left ? 8 + Math.random() * (ROAD_L - 50) : ROAD_R + 8 + Math.random() * 120,
+      y: Math.random() * H * 4,
+      s: 15 + Math.random() * 22,
+      g: `hsl(${114 + Math.random()*24},${44+Math.random()*24}%,${20+Math.random()*13}%)`
+    });
+  }
+  return t;
+}
+function genClouds() {
+  const c = [];
+  for (let i = 0; i < 6; i++) c.push({ x: 50+Math.random()*(W-100), y: 18+Math.random()*70, w: 55+Math.random()*65, spd: 0.07+Math.random()*0.14 });
+  return c;
+}
+
+// ── setLight — single source of truth ────────────────────
+// ALL light changes go through here — screen + Arduino LED simultaneously
+function setLight(color) {
+  gs.light = color;
+  // Screen bulbs
+  setBulbs(color);
+  // Arduino LED — same moment, no delay
+  if      (color === 'red')    sendLED('R');
+  else if (color === 'yellow') sendLED('Y');
+  else if (color === 'green')  sendLED('G');
+  else                         sendLED('O');
+}
+
+// ── Update ────────────────────────────────────────────────
+function update(dt) {
+  if (!gs || gs.phase === 'idle' || gs.phase === 'win' || gs.phase === 'gameover') return;
+
+  gs.clouds.forEach(c => { c.x += c.spd; if (c.x > W+80) c.x = -80; });
+
+  // Countdown: opening red → yellow → green
+  if (gs.phase === 'countdown') {
+    gs.lightTimer -= dt;
+    if (gs.lightTimer <= 0) {
+      if (gs.light === 'red') { setLight('yellow'); gs.lightTimer = 800; }
+      else if (gs.light === 'yellow') {
+        setLight('green');
+        gs.phase = 'racing';
+        gs.raceStart = performance.now();
+        setMsg('🟢 GREEN — Hold <b>SPACE</b> to go!', 'go');
+      }
+    }
+    return;
+  }
+
+  // Penalty freeze
+  if (gs.penaltyActive) {
+    gs.penaltyTimer -= dt;
+    gs.carSpd = Math.max(gs.carSpd - 0.3, 0);
+    gs.scroll += gs.carSpd;
+    if (gs.penaltyTimer <= 0) {
+      gs.penaltyActive = false;
+      if (gs.lives <= 0) {
+        gs.phase = 'gameover';
+        setLight(null); // all off
+        sendLED('O');
+        return;
+      }
+      // Resume on green
+      setLight('green');
+      setMsg('🟢 GREEN — Hold <b>SPACE</b> to go!', 'go');
+    }
+    return;
+  }
+
+  // Racing
+  gs.elapsed = (performance.now() - gs.raceStart) / 1000;
+  document.getElementById('time-val').textContent = gs.elapsed.toFixed(2) + 's';
+
+  // Car physics
+  if (gs.light === 'green') {
+    if (spaceDown) gs.carSpd = Math.min(gs.carSpd + ACCEL, MAX_SPD);
+    else           gs.carSpd = Math.max(gs.carSpd - DECEL, 0);
+  } else {
+    // Red or yellow: space does nothing, car decelerates naturally
+    gs.carSpd = Math.max(gs.carSpd - DECEL, 0);
+  }
+  gs.scroll += gs.carSpd;
+  document.getElementById('speed-val').textContent = Math.round(gs.carSpd / MAX_SPD * 160);
+
+  // Grace period on red
+  if (gs.light === 'red' && !gs.graceDone) {
+    gs.graceTimer -= dt;
+    if (gs.graceTimer <= 0) {
+      gs.graceDone = true;
+      // Grace expired — if still holding space RIGHT NOW, penalise
+      if (spaceDown) triggerPenalty();
+    }
+  }
+
+  // Red light timer countdown
+  if (gs.light === 'red') {
+    gs.lightTimer -= dt;
+    if (gs.lightTimer <= 0) {
+      // Red expires → go green
+      setLight('green');
+      gs.lightTimer = 0;
+      setMsg('🟢 GREEN — Hold <b>SPACE</b> to go!', 'go');
+    }
+  }
+
+  // Schedule triggers
+  const progress = gs.scroll / TOTAL_ROAD;
+  if (gs.schedIdx < SCHEDULE.length && gs.light === 'green') {
+    const nxt = SCHEDULE[gs.schedIdx];
+    if (progress >= nxt.pct) {
+      gs.schedIdx++;
+      triggerRed(nxt.redDur);
+    }
+  }
+
+  // Finish
+  // Win when finish line scrolls down to the car's position (car sits at H-90)
+  const finScreenY = H - (gs.scroll - (TOTAL_ROAD - H * 0.85));
+  if (finScreenY <= H - 90) triggerWin();
+}
+
+function triggerRed(duration) {
+  setLight('red'); // screen + Arduino LED simultaneously
+  gs.lightTimer = duration;
+  gs.graceTimer = 500;
+  gs.graceDone = false;
+  setMsg('🔴 RED — Release <b>SPACE</b>!', 'urgent');
+}
+
+function triggerPenalty() {
+  if (gs.penaltyActive) return;
+  gs.penaltyActive = true;
+  gs.penaltyTimer = 1500;
+  gs.lives--;
+  gs.carSpd = 0;
+  updateLivesUI();
+  // Keep red on Arduino during penalty
+  sendLED('R');
+}
+
+function triggerWin() {
+  gs.phase = 'win';
+  gs.winTime = gs.elapsed;
+  setLight('green');
+  if (bestTime === null || gs.winTime < bestTime) {
+    bestTime = gs.winTime;
+    document.getElementById('best-val').textContent = bestTime.toFixed(2) + 's';
+  }
+}
+
+// ── Render ────────────────────────────────────────────────
+function render() {
+  ctx.clearRect(0, 0, W, H);
+
+  const sky = ctx.createLinearGradient(0,0,0,H*0.4);
+  sky.addColorStop(0,'#060610'); sky.addColorStop(1,'#10102a');
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H*0.4);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  for (let i=0;i<28;i++){ctx.beginPath();ctx.arc((i*79+13)%W,(i*31+7)%88+5,0.9,0,Math.PI*2);ctx.fill()}
+
+  if (gs){ctx.fillStyle='rgba(255,255,255,0.04)';gs.clouds.forEach(c=>{ctx.beginPath();ctx.ellipse(c.x,c.y,c.w,c.w*0.33,0,0,Math.PI*2);ctx.fill()});}
+
+  ctx.fillStyle='#0b130b';ctx.fillRect(0,H*0.4,W,H*0.6);
+  ctx.fillStyle='#1a1a1a';ctx.fillRect(ROAD_L,0,ROAD_R-ROAD_L,H);
+
+  ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(ROAD_L,0);ctx.lineTo(ROAD_L,H);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ROAD_R,0);ctx.lineTo(ROAD_R,H);ctx.stroke();
+
+  if (gs){
+    const period=70,off=gs.scroll%period;
+    ctx.setLineDash([36,34]);ctx.lineDashOffset=-off;
+    ctx.strokeStyle='rgba(255,255,255,0.18)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(ROAD_MID,0);ctx.lineTo(ROAD_MID,H);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  if (gs){const finY=H-(gs.scroll-(TOTAL_ROAD-H*0.85));if(finY>-30&&finY<H+10)drawFinish(finY);}
+  if (gs) gs.trees.forEach(t=>{const sy=((t.y-gs.scroll*0.37)%(H*4)+H*4)%(H*4)-H*0.5;drawTree(t.x,sy,t.s,t.g);});
+
+  drawPost();
+  if (gs) drawCar(ROAD_MID,H-90,gs.penaltyActive);
+
+  if (gs&&gs.carSpd>4){
+    ctx.globalAlpha=(gs.carSpd-4)/MAX_SPD*0.32;
+    for(let i=0;i<7;i++){
+      const lx=ROAD_L+14+Math.random()*(ROAD_R-ROAD_L-28),ly=H-220-Math.random()*180;
+      ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(lx,ly+28+Math.random()*38);ctx.stroke();
+    }ctx.globalAlpha=1;
+  }
+
+  if (gs){
+    const pct=Math.min(gs.scroll/TOTAL_ROAD,1);
+    ctx.fillStyle='#ffffff0f';ctx.fillRect(ROAD_L,H-8,ROAD_R-ROAD_L,8);
+    const bc=gs.light==='red'?'#ff2233':gs.light==='yellow'?'#ffcc00':'#00ff88';
+    ctx.fillStyle=bc;ctx.fillRect(ROAD_L,H-8,(ROAD_R-ROAD_L)*pct,8);
+    ctx.font='9px Share Tech Mono';ctx.fillStyle='#fff';ctx.fillText('🏁',ROAD_R-13,H-10);
+  }
+
+
+
+  // Penalty
+  if (gs&&gs.penaltyActive){
+    ctx.fillStyle='rgba(200,0,0,0.2)';ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';
+    ctx.font='bold 22px Orbitron,monospace';ctx.fillStyle='#ff2233';
+    ctx.shadowColor='#ff2233';ctx.shadowBlur=22;
+    ctx.fillText('RAN A RED LIGHT! 🚨',W/2,H/2-15);ctx.shadowBlur=0;
+    ctx.font='12px Share Tech Mono';ctx.fillStyle='rgba(255,255,255,0.6)';
+    ctx.fillText(gs.lives>0?`${gs.lives} ${gs.lives===1?'life':'lives'} left`:'GAME OVER!',W/2,H/2+16);
+    ctx.textAlign='left';
+  }
+
+  if (!gs||gs.phase==='idle') drawIdle();
+  else if (gs.phase==='win') drawWin();
+  else if (gs.phase==='gameover') drawGameover();
+}
+
+function drawTree(x,y,s,g){ctx.fillStyle='#2a1a08';ctx.fillRect(x-3,y+s*0.55,6,s*0.55);ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-s*0.6,y+s);ctx.lineTo(x+s*0.6,y+s);ctx.closePath();ctx.fill();}
+function drawFinish(y){const sq=12,cols=Math.floor((ROAD_R-ROAD_L)/sq);for(let i=0;i<cols;i++)for(let r=0;r<2;r++){ctx.fillStyle=(i+r)%2===0?'#fff':'#000';ctx.fillRect(ROAD_L+i*sq,y+r*sq,sq,sq)}ctx.fillStyle='#fff';ctx.font='bold 10px Share Tech Mono';ctx.textAlign='center';ctx.fillText('FINISH',ROAD_MID,y-5);ctx.textAlign='left';}
+function drawPost(){
+  const px=ROAD_R+12;
+  ctx.fillStyle='#444';ctx.fillRect(px+2,H*0.24,6,H*0.46);
+  ctx.fillStyle='#1c1c1c';ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.roundRect(px,H*0.12,20,66,4);ctx.fill();ctx.stroke();
+  [{l:'red',oy:0},{l:'yellow',oy:22},{l:'green',oy:44}].forEach(b=>{
+    const on=gs&&gs.light===b.l;
+    const col=b.l==='red'?'#ff2233':b.l==='yellow'?'#ffcc00':'#00ff88';
+    ctx.beginPath();ctx.arc(px+10,H*0.135+b.oy+7,7,0,Math.PI*2);
+    ctx.fillStyle=on?col:'#111';
+    if(on){ctx.shadowColor=col;ctx.shadowBlur=16;}
+    ctx.fill();ctx.shadowBlur=0;
+  });
+}
+function drawCar(x,y,boom){
+  if(boom){for(let i=0;i<8;i++){const a=(i/8)*Math.PI*2,r=18+Math.sin(Date.now()*0.01+i)*5;ctx.beginPath();ctx.arc(x+Math.cos(a)*r,y+Math.sin(a)*r*0.5,3+Math.random()*3,0,Math.PI*2);ctx.fillStyle=['#ff4400','#ffaa00','#ff2200'][i%3];ctx.shadowColor='#ff4400';ctx.shadowBlur=10;ctx.fill();}ctx.shadowBlur=0;return;}
+  const cw=24,ch=38,cx=x-12,cy=y-19;
+  ctx.fillStyle='#bb1f3a';ctx.beginPath();ctx.roundRect(cx,cy+9,cw,ch-9,4);ctx.fill();
+  ctx.fillStyle='#dd2244';ctx.beginPath();ctx.roundRect(cx+3,cy,cw-6,20,4);ctx.fill();
+  ctx.fillStyle='rgba(120,210,255,0.75)';ctx.beginPath();ctx.roundRect(cx+4,cy+1,cw-8,11,2);ctx.fill();
+  ctx.fillStyle='#111';
+  [[cx-2,cy+10],[cx+cw-4,cy+10],[cx-2,cy+ch-14],[cx+cw-4,cy+ch-14]].forEach(([wx,wy])=>{ctx.beginPath();ctx.ellipse(wx+3,wy+4,4,5,0,0,Math.PI*2);ctx.fill();});
+  ctx.fillStyle='#ff0000';ctx.shadowColor='#ff0000';ctx.shadowBlur=7;
+  ctx.beginPath();ctx.ellipse(cx+4,cy+13,2,3,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(cx+cw-4,cy+13,2,3,0,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+}
+function drawIdle(){ctx.fillStyle='rgba(0,0,0,0.52)';ctx.fillRect(0,0,W,H);ctx.font='bold 14px Orbitron,monospace';ctx.fillStyle='rgba(255,255,255,0.5)';ctx.textAlign='center';ctx.fillText('PRESS SPACE TO START',W/2,H/2);ctx.textAlign='left';}
+function drawWin(){
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,W,H);ctx.textAlign='center';
+  ctx.font='bold 34px Orbitron,monospace';ctx.fillStyle='#00ff88';ctx.shadowColor='#00ff88';ctx.shadowBlur=28;ctx.fillText('FINISH! 🏁',W/2,H/2-55);ctx.shadowBlur=0;
+  ctx.font='bold 50px Orbitron,monospace';ctx.fillStyle='#fff';ctx.fillText(gs.winTime.toFixed(2)+'s',W/2,H/2);
+  if(bestTime&&gs.winTime<=bestTime){ctx.font='bold 13px Orbitron,monospace';ctx.fillStyle='#ffcc00';ctx.shadowColor='#ffcc00';ctx.shadowBlur=14;ctx.fillText('★ NEW BEST ★',W/2,H/2+36);ctx.shadowBlur=0;}
+  ctx.font='12px Share Tech Mono';ctx.fillStyle='#666';ctx.fillText('SPACE to play again',W/2,H/2+70);ctx.textAlign='left';
+}
+function drawGameover(){
+  ctx.fillStyle='rgba(0,0,0,0.78)';ctx.fillRect(0,0,W,H);ctx.textAlign='center';
+  ctx.font='bold 36px Orbitron,monospace';ctx.fillStyle='#ff2233';ctx.shadowColor='#ff2233';ctx.shadowBlur=22;ctx.fillText('GAME OVER',W/2,H/2-30);ctx.shadowBlur=0;
+  ctx.font='12px Share Tech Mono';ctx.fillStyle='#666';ctx.fillText('You held SPACE on a red light!',W/2,H/2+10);ctx.fillText('SPACE to retry',W/2,H/2+42);ctx.textAlign='left';
+}
+
+function setBulbs(l){
+  document.getElementById('bulb-red').className='bulb'+(l==='red'?' active-red':'');
+  document.getElementById('bulb-yellow').className='bulb'+(l==='yellow'?' active-yellow':'');
+  document.getElementById('bulb-green').className='bulb'+(l==='green'?' active-green':'');
+}
+function setMsg(html,cls){const el=document.getElementById('instruction');el.innerHTML=html;el.className=cls||'';}
+function updateLivesUI(){if(!gs)return;for(let i=1;i<=3;i++)document.getElementById('life'+i).classList.toggle('lost',i>gs.lives);}
+
+// ── Input ─────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space') return;
+  e.preventDefault();
+  if (spaceDown) return;
+  spaceDown = true;
+  if (!gs || gs.phase === 'idle' || gs.phase === 'win' || gs.phase === 'gameover') {
+    initGame(); startCountdown(); return;
+  }
+  // Pressing space on red after grace = penalty
+  if (gs.phase === 'racing' && gs.light === 'red' && gs.graceDone) {
+    triggerPenalty();
+  }
+});
+document.addEventListener('keyup', e => { if (e.code === 'Space') { e.preventDefault(); spaceDown = false; } });
+canvas.addEventListener('click', () => { if (!gs || gs.phase === 'idle' || gs.phase === 'win' || gs.phase === 'gameover') { initGame(); startCountdown(); } });
+
+function startCountdown() {
+  gs.phase = 'countdown';
+  setLight('red'); gs.lightTimer = 2200;
+  setMsg('🔴 Wait for GREEN...', 'urgent');
+}
+
+function loop(ts) {
+  const dt = Math.min(ts - lastTs, 50); lastTs = ts;
+  update(dt); render();
+  requestAnimationFrame(loop);
+}
+initGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
